@@ -1,0 +1,499 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Mundo – RPGloco</title>
+  <style>
+    body { margin:0; background:#111; color:#fff; font-family:Arial,sans-serif; overflow:hidden; }
+
+    .hud{
+      position:fixed; top:0; left:0; right:0; height:40px;
+      background:rgba(0,0,0,0.8); display:flex; align-items:center;
+      padding:0 10px; gap:15px; font-size:14px; z-index:10;
+    }
+    .hud .right-buttons{ margin-left:auto; display:flex; gap:10px; }
+
+    .hud button{
+      padding:4px 8px; background:#007bff; border:none; border-radius:4px;
+      color:white; cursor:pointer; font-size:12px;
+    }
+    .hud button:hover{ background:#3399ff; }
+
+    .xp-wrap{ display:flex; align-items:center; gap:8px; }
+    .xp-bar-container{ width:130px; height:8px; background:#333; border-radius:99px; overflow:hidden; }
+    .xp-bar{ height:100%; width:0%; background:#4caf50; }
+    .xp-text{ font-size:12px; color:#ddd; min-width:170px; }
+
+    .world-container{
+      position:absolute; top:40px; bottom:0; left:0; right:0;
+      display:flex; justify-content:center; align-items:center;
+    }
+
+    canvas{ border:2px solid #444; image-rendering:pixelated; }
+
+    .position-label{ position:fixed; bottom:5px; left:10px; font-size:12px; color:#ccc; z-index:10; }
+
+    /* Mini-mapa (cruz 3x3, usamos solo 5 celdas) */
+    .minimap{
+      position:fixed;
+      right:10px;
+      bottom:10px;
+      width:126px;
+      height:126px;
+      display:grid;
+      grid-template-columns:repeat(3, 1fr);
+      grid-template-rows:repeat(3, 1fr);
+      gap:6px;
+      z-index:10;
+      opacity:0.95;
+      pointer-events:none;
+    }
+    .mini-cell{
+      border:2px solid #555;
+      background:rgba(0,0,0,0.35);
+      border-radius:6px;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      font-size:11px;
+      color:#ccc;
+    }
+    .mini-cell.active{
+      border-color:#00e676;
+      box-shadow:0 0 0 2px rgba(0,230,118,0.25) inset;
+      color:#fff;
+    }
+    .mini-cell.empty{ opacity:0; border:none; background:transparent; }
+  </style>
+</head>
+<body>
+
+<!-- Datos del jugador local -->
+<div id="player-data"
+     data-id="{{ character.id }}"
+     data-name="{{ character.name }}"
+     data-class="{{ character.get_char_class_display }}"
+     data-level="{{ character.level }}"
+     data-xp="{{ character.xp }}"
+     data-xp-next="{{ character.xp_to_next_level }}"
+     data-lives="{{ character.lives }}"
+     data-coins="{{ character.coins }}"
+     data-x="{{ player_state.x|default:3 }}"
+     data-y="{{ player_state.y|default:15 }}"
+     data-zone="{{ current_zone }}"
+     data-img="{% if character.image %}{{ character.image.url }}{% else %}{% static 'img/player_placeholder.png' %}{% endif %}">
+</div>
+
+<!-- Otros jugadores -->
+<div id="other-players-data" data-players='{{ other_players_json|default:"[]"|escapejs }}'></div>
+
+<div class="hud">
+  <span>Personaje: <strong id="hud-name">{{ character.name }}</strong></span>
+  <span>Clase: <strong id="hud-class">{{ character.get_char_class_display }}</strong></span>
+  <span>Zona: <strong id="hud-zone">{{ current_zone }}</strong></span>
+  <span>Nivel: <strong id="hud-level">{{ character.level }}</strong></span>
+  <span>Vidas: <strong id="hud-lives">{{ character.lives }}</strong></span>
+  <span>Monedas: <strong id="hud-coins">{{ character.coins }}</strong></span>
+
+  <div class="xp-wrap">
+    <span>XP:</span>
+    <div class="xp-bar-container"><div id="xp-bar" class="xp-bar"></div></div>
+    <span id="xp-text" class="xp-text"></span>
+  </div>
+
+  <div class="right-buttons">
+    <button onclick="openInventory()">Inventario (I)</button>
+  </div>
+</div>
+
+<div class="world-container">
+  <!-- 18x18 tiles => 576x576 perfecto -->
+  <canvas id="world-canvas" width="576" height="576"></canvas>
+</div>
+
+<div class="position-label" id="position-label">Posición: (0, 0)</div>
+
+<!-- Mini-mapa cruz -->
+<div class="minimap" id="minimap">
+  <div class="mini-cell empty"></div>
+  <div class="mini-cell" data-zone="north">N</div>
+  <div class="mini-cell empty"></div>
+
+  <div class="mini-cell" data-zone="west">W</div>
+  <div class="mini-cell" data-zone="center">C</div>
+  <div class="mini-cell" data-zone="east">E</div>
+
+  <div class="mini-cell empty"></div>
+  <div class="mini-cell" data-zone="south">S</div>
+  <div class="mini-cell empty"></div>
+</div>
+
+<script>
+/* ====== MAPA DINÁMICO ====== */
+const worldMap = JSON.parse('{{ world_map_json|escapejs }}');
+const ROWS = worldMap.length;
+const COLS = worldMap[0].length;
+const TILE_SIZE = 32;
+
+/* ====== TILES ====== */
+const G="ground", W="wall", T="tree", S="shop", E="enemy", Z="enemy_zone", P="portal", H="house";
+
+/* ====== SPRITES: MEDIA primero, fallback a STATIC ====== */
+const mediaTilesBase = "{{ media_tiles_base_url|default:'' }}";
+const staticTilesBase = "{{ static_tiles_base_url|default:'' }}";
+
+/* Si tu view aún pasa tiles_base_url viejo, lo usamos como último fallback */
+const legacyTilesBase = "{{ tiles_base_url|default:'' }}";
+
+const tileSpritesPrimary = {
+  [G]: mediaTilesBase + "ground.png",
+  [W]: mediaTilesBase + "wall.png",
+  [T]: mediaTilesBase + "tree.png",
+  [S]: mediaTilesBase + "shop.png",
+  [E]: mediaTilesBase + "enemy.png",
+  [Z]: mediaTilesBase + "pink.png",
+  [P]: mediaTilesBase + "portal.png",
+  [H]: mediaTilesBase + "house.png",
+};
+
+const tileSpritesFallback = {
+  [G]: staticTilesBase + "ground.png",
+  [W]: staticTilesBase + "wall.png",
+  [T]: staticTilesBase + "tree.png",
+  [S]: staticTilesBase + "shop.png",
+  [E]: staticTilesBase + "enemy.png",
+  [Z]: staticTilesBase + "pink.png",
+  [P]: staticTilesBase + "portal.png",
+  [H]: mediaTilesBase + "house.png",
+};
+
+const tileSpritesLegacy = {
+  [G]: legacyTilesBase + "ground.png",
+  [W]: legacyTilesBase + "wall.png",
+  [T]: legacyTilesBase + "tree.png",
+  [S]: legacyTilesBase + "shop.png",
+  [E]: legacyTilesBase + "enemy.png",
+  [Z]: legacyTilesBase + "pink.png",
+  [P]: legacyTilesBase + "portal.png",
+  [H]: mediaTilesBase + "house.png",
+};
+
+const tileColors = {
+  [G]: "#333333", [W]: "#8B5A2B", [T]: "#0A7A0A", [S]: "#4444AA", [E]: "#AA4444", [Z]: "#884488", [P]: "#00BFA5",
+};
+
+/* ====== CANVAS ====== */
+const canvas = document.getElementById("world-canvas");
+const ctx = canvas.getContext("2d");
+const positionLabel = document.getElementById("position-label");
+
+/* ====== CSRF ====== */
+function getCookie(name) {
+  let cookieValue = null;
+  if (document.cookie && document.cookie !== "") {
+    const cookies = document.cookie.split(";");
+    for (let c of cookies) {
+      c = c.trim();
+      if (c.startsWith(name + "=")) {
+        cookieValue = decodeURIComponent(c.substring(name.length + 1));
+        break;
+      }
+    }
+  }
+  return cookieValue;
+}
+const csrftoken = getCookie("csrftoken");
+
+/* ====== PLAYER ====== */
+const playerDataDiv = document.getElementById("player-data");
+let playerX = parseInt(playerDataDiv.dataset.x || "3");
+let playerY = parseInt(playerDataDiv.dataset.y || "15");
+let currentZone = playerDataDiv.dataset.zone || "center";
+
+let currentXP = parseInt(playerDataDiv.dataset.xp || "0");
+let xpToNext = parseInt(playerDataDiv.dataset.xpNext || "0");
+
+const playerImg = new Image();
+playerImg.src = playerDataDiv.dataset.img;
+playerImg.onerror = () => playerImg._broken = true;
+
+/* ====== HUD ====== */
+const hudZone = document.getElementById("hud-zone");
+const hudLevel = document.getElementById("hud-level");
+const hudLives = document.getElementById("hud-lives");
+const hudCoins = document.getElementById("hud-coins");
+const xpBar = document.getElementById("xp-bar");
+const xpText = document.getElementById("xp-text");
+
+function updateHudXP() {
+  if (!xpToNext || xpToNext <= 0) {
+    xpText.textContent = `${currentXP} (faltan ? para subir)`;
+    xpBar.style.width = "0%";
+    return;
+  }
+  const remaining = Math.max(0, xpToNext - currentXP);
+  const pct = Math.max(0, Math.min(100, Math.floor((currentXP / xpToNext) * 100)));
+  xpBar.style.width = pct + "%";
+  xpText.textContent = `${currentXP}/${xpToNext} (faltan ${remaining})`;
+}
+updateHudXP();
+
+/* ====== MINI MAP ====== */
+function updateMiniMap(zone) {
+  document.querySelectorAll("#minimap .mini-cell").forEach(el => {
+    const z = el.getAttribute("data-zone");
+    if (!z) return;
+    el.classList.toggle("active", z === zone);
+  });
+}
+updateMiniMap(currentZone);
+
+/* ====== OTROS JUGADORES ====== */
+let otherPlayers = [];
+try {
+  otherPlayers = JSON.parse(document.getElementById("other-players-data").dataset.players) || [];
+} catch { otherPlayers = []; }
+
+const otherPlayerImages = {};
+function loadOtherPlayerImage(p) {
+  if (!p || !p.imgUrl) return null;
+  if (otherPlayerImages[p.id]) return otherPlayerImages[p.id];
+  const img = new Image();
+  img.src = p.imgUrl;
+  img.onerror = () => img._broken = true;
+  otherPlayerImages[p.id] = img;
+  return img;
+}
+
+/* ====== ENEMIGOS VIVOS ====== */
+let aliveEnemies = [];
+
+/* ====== SPRITES CACHE ====== */
+const loadedSprites = {};
+
+function resolveTileUrl(tile) {
+  // si no hay bases configuradas, cae al legacy
+  const primary = tileSpritesPrimary[tile];
+  const fallback = tileSpritesFallback[tile];
+  const legacy = tileSpritesLegacy[tile];
+
+  // si mediaTilesBase viene vacío, primary será solo "ground.png" => evitamos eso
+  const looksLikeBareFile = (u) => u && !u.includes("/") && u.endsWith(".png");
+
+  if (primary && !looksLikeBareFile(primary) && mediaTilesBase) return {primary, fallback, legacy};
+  return {primary: fallback || legacy, fallback: legacy, legacy: legacy};
+}
+
+function loadSprite(tile) {
+  if (loadedSprites[tile]) return loadedSprites[tile];
+
+  const urls = resolveTileUrl(tile);
+  if (!urls.primary) return null;
+
+  const img = new Image();
+  img.src = urls.primary;
+
+  img.onerror = () => {
+    if (urls.fallback && img.src !== urls.fallback) {
+      img.src = urls.fallback;
+      return;
+    }
+    if (urls.legacy && img.src !== urls.legacy) {
+      img.src = urls.legacy;
+      return;
+    }
+    img._broken = true;
+  };
+
+  loadedSprites[tile] = img;
+  return img;
+}
+
+/* ====== DIBUJO ====== */
+function drawFallbackTile(tile, x, y) {
+  ctx.fillStyle = tileColors[tile] || "#222";
+  ctx.fillRect(x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE);
+}
+
+function drawWorld() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  for (let y = 0; y < ROWS; y++) {
+    for (let x = 0; x < COLS; x++) {
+      let tile = worldMap[y][x] || G;
+
+      // Ocultar enemigos muertos
+      if (tile === E || tile === Z) {
+        const alive = aliveEnemies.some(e => e.x === x && e.y === y);
+        if (!alive) tile = G;
+      }
+
+      const img = loadSprite(tile);
+      if (img && img.complete && !img._broken) {
+        ctx.drawImage(img, x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE);
+      } else {
+        drawFallbackTile(tile, x, y);
+      }
+    }
+  }
+
+  // player
+  if (playerImg.complete && !playerImg._broken) {
+    ctx.drawImage(playerImg, playerX * TILE_SIZE, playerY * TILE_SIZE, TILE_SIZE, TILE_SIZE);
+  } else {
+    ctx.fillStyle = "#FFFF44";
+    ctx.fillRect(playerX * TILE_SIZE, playerY * TILE_SIZE, TILE_SIZE, TILE_SIZE);
+  }
+
+  // otros jugadores
+  for (const p of otherPlayers) {
+    if (p.x == null || p.y == null) continue;
+    if (p.x === playerX && p.y === playerY) continue;
+
+    const img = loadOtherPlayerImage(p);
+    if (img && img.complete && !img._broken) {
+      ctx.drawImage(img, p.x * TILE_SIZE, p.y * TILE_SIZE, TILE_SIZE, TILE_SIZE);
+    } else {
+      ctx.fillStyle = "#44AAFF";
+      ctx.fillRect(p.x * TILE_SIZE + 6, p.y * TILE_SIZE + 6, TILE_SIZE - 12, TILE_SIZE - 12);
+    }
+
+    ctx.fillStyle = "#fff";
+    ctx.font = "10px Arial";
+    ctx.fillText((p.name || "?").substring(0, 8), p.x * TILE_SIZE + 2, p.y * TILE_SIZE - 2);
+  }
+
+  positionLabel.textContent = `Zona: ${currentZone} | Posición: (${playerX}, ${playerY})`;
+}
+
+/* ====== MOVIMIENTO ====== */
+function isInside(x,y){ return x>=0 && x<COLS && y>=0 && y<ROWS; }
+function isWalkable(x,y){
+  const tile = worldMap[y][x];
+  return !(tile === W || tile === T || tile === H); // portal/shop/zona/enemy son caminables
+}
+
+let enteringShopLock = false;
+
+function syncMoveWithServer() {
+  fetch("/api/game/world/move/", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "X-CSRFToken": csrftoken },
+    body: JSON.stringify({ x: playerX, y: playerY }),
+  })
+  .then(r => r.json())
+  .then(data => {
+    if (data.error) return;
+
+    // si cambió de mapa/zone, recargar para obtener world_map_json nuevo
+    if (data.map_changed) {
+      window.location.reload();
+      return;
+    }
+
+    if (data.position) {
+      playerX = data.position.x;
+      playerY = data.position.y;
+    }
+
+    if (typeof data.zone === "string") {
+      currentZone = data.zone;
+      hudZone.textContent = currentZone;
+      updateMiniMap(currentZone);
+    }
+
+    if (data.character) {
+      hudLevel.textContent = data.character.level;
+      hudLives.textContent = data.character.lives;
+      hudCoins.textContent = data.character.coins;
+
+      if (typeof data.character.xp === "number") currentXP = data.character.xp;
+      if (typeof data.character.xp_to_next === "number") xpToNext = data.character.xp_to_next;
+      updateHudXP();
+    }
+
+    if (Array.isArray(data.other_players)) otherPlayers = data.other_players;
+    if (Array.isArray(data.alive_enemies)) aliveEnemies = data.alive_enemies;
+
+    if (data.start_battle) {
+      const enemyIds = data.enemy_ids || [];
+      if (enemyIds.length > 0) {
+        const q = new URLSearchParams({
+          character_id: data.character_id,
+          enemy_ids: enemyIds.join(",")
+        });
+        window.location.href = "/api/game/battle/sim/?" + q.toString();
+        return;
+      }
+    }
+
+    if (data.enter_shop && !enteringShopLock) {
+      enteringShopLock = true;
+
+      // anti-loop: bajamos 1 tile si se puede y lo persistimos
+      const ny = playerY + 1;
+      if (isInside(playerX, ny) && isWalkable(playerX, ny)) {
+        playerY = ny;
+      }
+
+      fetch("/api/game/world/move/", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-CSRFToken": csrftoken },
+        body: JSON.stringify({ x: playerX, y: playerY }),
+      }).finally(() => {
+        window.location.href = "/api/game/shop/";
+      });
+
+      return;
+    }
+
+    drawWorld();
+  })
+  .catch(() => drawWorld());
+}
+
+function movePlayer(dx,dy){
+  if (enteringShopLock) return;
+  const nx = playerX + dx;
+  const ny = playerY + dy;
+  if(!isInside(nx,ny)) return;
+  if(!isWalkable(nx,ny)) return;
+  playerX = nx;
+  playerY = ny;
+  syncMoveWithServer();
+}
+
+/* ====== INPUT ====== */
+document.addEventListener("keydown",(e)=>{
+  const key = e.key.toLowerCase();
+  if(key==="w") movePlayer(0,-1);
+  else if(key==="s") movePlayer(0,1);
+  else if(key==="a") movePlayer(-1,0);
+  else if(key==="d") movePlayer(1,0);
+  else if(key==="i") openInventory();
+});
+
+/* ====== ENEMIGOS VIVOS ====== */
+function refreshEnemies(){
+  fetch("../world/enemies/")
+    .then(r=>r.json())
+    .then(data=>{
+      if(Array.isArray(data.alive_enemies)) aliveEnemies = data.alive_enemies;
+      drawWorld();
+    })
+    .catch(()=>{});
+}
+setInterval(refreshEnemies, 3000);
+
+/* ====== HUD ====== */
+function openInventory(){ window.location.href = "{% url 'inventory_page' %}"; }
+
+/* ====== INIT ====== */
+drawWorld();
+syncMoveWithServer();
+refreshEnemies();
+</script>
+
+</body>
+</html>

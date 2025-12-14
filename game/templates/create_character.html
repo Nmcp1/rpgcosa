@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Crear Personaje</title>
+</head>
+<body>
+
+<h2>Crear Personaje</h2>
+
+<form action="{% url 'create_character_form' %}" method="POST" enctype="multipart/form-data">
+
+    {% csrf_token %}
+
+    <label>Nombre:</label><br>
+    <input type="text" name="name" required><br><br>
+
+    <label>Clase:</label><br>
+    <select name="char_class" required>
+        <option value="tank">Tanque</option>
+        <option value="dps">DPS</option>
+        <option value="healer">Healer</option>
+        <option value="apprentice">Aprendiz</option>
+    </select>
+    <br><br>
+
+    <label>Imagen (opcional):</label><br>
+    <input type="file" name="image"><br><br>
+
+    <button type="submit">Crear</button>
+</form>
+
+<p>
+⚠ Debes estar logueado para que funcione (usa /admin o el login DRF).
+</p>
+
+</body>
+</html>

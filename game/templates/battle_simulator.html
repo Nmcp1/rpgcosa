@@ -1,0 +1,488 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Simulador de Batalla – RPGloco</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background: #222;
+            color: #fff;
+            text-align: center;
+            margin: 0;
+            padding: 0;
+        }
+
+        .battle-wrapper {
+            display: flex;
+            justify-content: space-around;
+            align-items: flex-start;
+            margin-top: 20px;
+            padding: 0 20px;
+        }
+
+        .entity {
+            width: 180px;
+            padding: 10px;
+            background: #333;
+            border-radius: 12px;
+            box-shadow: 0 0 8px #000;
+        }
+        .entity h3 {
+            margin-top: 0;
+            margin-bottom: 6px;
+            font-size: 16px;
+        }
+        .entity img {
+            border-radius: 5px;
+            margin-bottom: 6px;
+            background: #111;
+            width: 120px;
+            height: 120px;
+            object-fit: cover;
+        }
+
+        .hp-bar {
+            position: relative;
+            height: 10px;
+            background: #800;
+            border-radius: 5px;
+            margin-top: 2px;
+        }
+        .hp-inner {
+            height: 100%;
+            background: #0f0;
+            width: 100%;
+            border-radius: 5px;
+            transition: width 0.2s;
+        }
+        .hp-text {
+            font-size: 11px;
+            margin-top: 2px;
+        }
+        .stats-text {
+            font-size: 11px;
+            margin-top: 4px;
+        }
+
+        .enemies-container {
+            display: flex;
+            gap: 8px;
+            flex-wrap: nowrap;
+            justify-content: center;
+            align-items: flex-start;
+            max-width: 900px;
+            overflow: hidden;
+        }
+
+        #log {
+            margin: 10px auto 0 auto;
+            width: 80%;
+            height: 150px;
+            overflow-y: auto;
+            background: #111;
+            padding: 10px;
+            border-radius: 10px;
+            text-align: left;
+            box-shadow: 0 0 10px #000;
+            font-size: 13px;
+        }
+
+        #result {
+            font-size: 26px;
+            margin-top: 10px;
+        }
+
+        #back-btn {
+            margin: 20px auto 30px auto;
+            padding: 14px 40px;
+            font-size: 20px;
+            font-weight: bold;
+            border-radius: 10px;
+            border: none;
+            background: #28a745;
+            color: #fff;
+            cursor: pointer;
+            display: none;
+            box-shadow: 0 0 15px #000;
+        }
+
+        #back-btn:hover {
+            background: #34c759;
+        }
+
+        .hit {
+            animation: hitAnim 0.25s;
+        }
+        @keyframes hitAnim {
+            0% { box-shadow: 0 0 0 #000; transform: translateX(0); }
+            25% { box-shadow: 0 0 12px #f00; transform: translateX(-3px); }
+            50% { box-shadow: 0 0 12px #f00; transform: translateX(3px); }
+            100% { box-shadow: 0 0 0 #000; transform: translateX(0); }
+        }
+
+        .heal {
+            animation: healAnim 0.35s;
+        }
+        @keyframes healAnim {
+            0% { box-shadow: 0 0 0 #000; transform: translateY(0); }
+            30% { box-shadow: 0 0 12px #2ecc71; transform: translateY(-2px); }
+            60% { box-shadow: 0 0 12px #2ecc71; transform: translateY(2px); }
+            100% { box-shadow: 0 0 0 #000; transform: translateY(0); }
+        }
+    </style>
+</head>
+<body>
+
+<div class="battle-wrapper">
+    <div id="player-card" class="entity">
+        <h3 id="player-name">Jugador</h3>
+        <img id="player-img" src="https://via.placeholder.com/120x120?text=Player" alt="Player">
+        <div class="hp-bar">
+            <div id="player-hp-bar" class="hp-inner"></div>
+        </div>
+        <div id="player-hp-text" class="hp-text">HP: ?</div>
+        <div id="player-stats" class="stats-text"></div>
+    </div>
+
+    <div id="enemies-container" class="enemies-container"></div>
+</div>
+
+<div id="log"></div>
+<div id="result"></div>
+
+<button id="back-btn" onclick="goBackToWorld()">Volver al mundo</button>
+
+<script>
+function getCookie(name) {
+    let cookieValue = null;
+    if (document.cookie && document.cookie !== "") {
+        const cookies = document.cookie.split(";");
+        for (let i = 0; i < cookies.length; i++) {
+            const cookie = cookies[i].trim();
+            if (cookie.substring(0, name.length + 1) === (name + "=")) {
+                cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                break;
+            }
+        }
+    }
+    return cookieValue;
+}
+const csrftoken = getCookie("csrftoken");
+
+let playerState = {
+    id: null,
+    name: "",
+    maxHP: 100,
+    hp: 100,
+    atk: 0,
+    def: 0,
+    speed: 0,
+};
+
+let enemiesState = [];
+
+function appendLog(text) {
+    const logDiv = document.getElementById("log");
+    logDiv.innerHTML += text + "<br>";
+    logDiv.scrollTop = logDiv.scrollHeight;
+}
+
+function clamp(n, min, max) {
+    return Math.max(min, Math.min(max, n));
+}
+
+function updatePlayerHP() {
+    const pct = playerState.maxHP > 0 ? clamp((playerState.hp / playerState.maxHP) * 100, 0, 100) : 0;
+    document.getElementById("player-hp-bar").style.width = pct + "%";
+    document.getElementById("player-hp-text").innerText =
+        `HP: ${playerState.hp}/${playerState.maxHP}`;
+}
+
+function updateEnemyHP(state) {
+    if (!state) return;
+    const pct = state.maxHP > 0 ? clamp((state.hp / state.maxHP) * 100, 0, 100) : 0;
+    state.hpBar.style.width = pct + "%";
+    state.hpText.innerText = `HP: ${state.hp}/${state.maxHP}`;
+}
+
+function clearEnemiesUI() {
+    enemiesState = [];
+    document.getElementById("enemies-container").innerHTML = "";
+}
+
+function createEnemyCard(enemyData) {
+    const container = document.getElementById("enemies-container");
+
+    const card = document.createElement("div");
+    card.className = "entity";
+
+    const nameEl = document.createElement("h3");
+    nameEl.innerText = enemyData.name;
+
+    const imgEl = document.createElement("img");
+    imgEl.alt = enemyData.name;
+    imgEl.src = enemyData.image || "https://via.placeholder.com/120x120?text=Enemy";
+
+    const hpBarOuter = document.createElement("div");
+    hpBarOuter.className = "hp-bar";
+    const hpInner = document.createElement("div");
+    hpInner.className = "hp-inner";
+    hpBarOuter.appendChild(hpInner);
+
+    const hpText = document.createElement("div");
+    hpText.className = "hp-text";
+
+    const statsText = document.createElement("div");
+    statsText.className = "stats-text";
+    statsText.innerText =
+        `ATK: ${enemyData.atk} | DEF: ${enemyData.defense} | SPD: ${enemyData.speed}`;
+
+    card.appendChild(nameEl);
+    card.appendChild(imgEl);
+    card.appendChild(hpBarOuter);
+    card.appendChild(hpText);
+    card.appendChild(statsText);
+
+    container.appendChild(card);
+
+    const state = {
+        id: enemyData.id,
+        name: enemyData.name,
+        maxHP: enemyData.max_hp,
+        hp: enemyData.max_hp,
+        atk: enemyData.atk,
+        def: enemyData.defense,
+        speed: enemyData.speed,
+        img: imgEl,
+        hpBar: hpInner,
+        hpText: hpText,
+        statsText: statsText,
+        card: card,
+    };
+
+    enemiesState.push(state);
+    updateEnemyHP(state);
+}
+
+function scaleEnemiesLayout() {
+    const n = enemiesState.length;
+    if (!n) return;
+    const maxWidth = 900;
+    const baseWidth = 190;
+    let scale = maxWidth / (n * baseWidth);
+    if (scale > 1) scale = 1;
+    enemiesState.forEach(e => {
+        e.card.style.transform = `scale(${scale})`;
+        e.card.style.transformOrigin = "top center";
+    });
+}
+
+function findEnemyByName(name) {
+    let fallback = null;
+    for (const e of enemiesState) {
+        if (e.name === name) {
+            if (e.hp > 0) return e;
+            if (!fallback) fallback = e;
+        }
+    }
+    return fallback;
+}
+
+function goBackToWorld() {
+    window.location.href = "/api/game/world/";
+}
+
+async function startBattle(characterId, enemyIdsArray, spawnId) {
+    const backBtn = document.getElementById("back-btn");
+    backBtn.style.display = "none";
+
+    document.getElementById("log").innerHTML = "";
+    document.getElementById("result").innerHTML = "";
+
+    appendLog("Llamando al servidor...");
+
+    const url = `/api/game/battle/start/?spawn_id=${encodeURIComponent(spawnId || "")}`;
+
+    const response = await fetch(url, {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json",
+            "X-CSRFToken": csrftoken,
+        },
+        body: JSON.stringify({
+            character_id: characterId,
+            enemy_ids: enemyIdsArray,
+        }),
+    });
+
+    if (!response.ok) {
+        appendLog("Error en la petición: " + response.status);
+        const txt = await response.text();
+        appendLog(txt);
+        backBtn.style.display = "inline-block";
+        return;
+    }
+
+    const data = await response.json();
+    setupEntitiesFromData(data);
+    appendLog("Combate iniciado...");
+    simulateVisualBattle(data.log, data.fight_result);
+}
+
+function setupEntitiesFromData(data) {
+    playerState.id = data.player.id;
+    playerState.name = data.player.name;
+    playerState.maxHP = data.player.max_hp;
+    playerState.hp = data.player.max_hp;
+    playerState.atk = data.player.atk;
+    playerState.def = data.player.defense;
+    playerState.speed = data.player.speed;
+
+    document.getElementById("player-name").innerText = playerState.name;
+    document.getElementById("player-stats").innerText =
+        `ATK: ${playerState.atk} | DEF: ${playerState.def} | SPD: ${playerState.speed}`;
+
+    const playerImg = document.getElementById("player-img");
+    playerImg.src = data.player.image || "https://via.placeholder.com/120x120?text=Player";
+
+    updatePlayerHP();
+
+    clearEnemiesUI();
+    data.enemies.forEach(e => createEnemyCard(e));
+    scaleEnemiesLayout();
+}
+
+function animateHitCard(cardElement) {
+    if (!cardElement) return;
+    cardElement.classList.add("hit");
+    setTimeout(() => cardElement.classList.remove("hit"), 250);
+}
+
+function animateHealCard(cardElement) {
+    if (!cardElement) return;
+    cardElement.classList.add("heal");
+    setTimeout(() => cardElement.classList.remove("heal"), 350);
+}
+
+async function notifyDefeatAndReturn() {
+    if (playerState.id) {
+        try {
+            await fetch("/api/game/characters/lose-life/", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "X-CSRFToken": csrftoken,
+                },
+                body: JSON.stringify({ character_id: playerState.id }),
+            });
+        } catch (e) {
+            console.error("Error notificando derrota:", e);
+        }
+    }
+    setTimeout(() => {
+        window.location.href = "/api/game/world/";
+    }, 1000);
+}
+
+async function simulateVisualBattle(logLines, result) {
+    const attackRegex = /^(.*?) ataca a (.*?) causando (\d+) daño/;
+    const healRegex = /^(.*?) cura a (.*?) por (\d+) HP/;
+
+    for (const line of logLines) {
+        appendLog(line);
+
+        // ATAQUE
+        let match = line.match(attackRegex);
+        if (match) {
+            const attackerName = match[1];
+            const targetName = match[2];
+            const dmg = parseInt(match[3], 10) || 0;
+
+            if (attackerName === playerState.name) {
+                const enemy = findEnemyByName(targetName);
+                if (enemy) {
+                    enemy.hp = Math.max(0, enemy.hp - dmg);
+                    updateEnemyHP(enemy);
+                    animateHitCard(enemy.card);
+                }
+            }
+
+            if (targetName === playerState.name) {
+                playerState.hp = Math.max(0, playerState.hp - dmg);
+                updatePlayerHP();
+                animateHitCard(document.getElementById("player-card"));
+            }
+
+            await new Promise(resolve => setTimeout(resolve, 250));
+            continue;
+        }
+
+        // CURA
+        match = line.match(healRegex);
+        if (match) {
+            const healerName = match[1];
+            const targetName = match[2];
+            const heal = parseInt(match[3], 10) || 0;
+
+            if (targetName === playerState.name) {
+                playerState.hp = Math.min(playerState.maxHP, playerState.hp + heal);
+                updatePlayerHP();
+                animateHealCard(document.getElementById("player-card"));
+            } else {
+                const enemy = findEnemyByName(targetName);
+                if (enemy) {
+                    enemy.hp = Math.min(enemy.maxHP, enemy.hp + heal);
+                    updateEnemyHP(enemy);
+                    animateHealCard(enemy.card);
+                }
+            }
+
+            await new Promise(resolve => setTimeout(resolve, 250));
+            continue;
+        }
+
+        // Otras líneas (incluye "intenta curar..." / turnos / etc.)
+        await new Promise(resolve => setTimeout(resolve, 250));
+    }
+
+    const resultDiv = document.getElementById("result");
+    const backBtn = document.getElementById("back-btn");
+
+    if (result === "win") {
+        resultDiv.innerHTML = "🏆 ¡Victoria!";
+        backBtn.style.display = "inline-block";
+    } else if (result === "lose") {
+        resultDiv.innerHTML = "💀 Derrota...";
+        backBtn.style.display = "inline-block";
+        await notifyDefeatAndReturn();
+    } else {
+        resultDiv.innerHTML = "⚖ Empate";
+        backBtn.style.display = "inline-block";
+    }
+}
+
+window.addEventListener("load", () => {
+    const params = new URLSearchParams(window.location.search);
+    const charId = params.get("character_id");
+    const enemyIdsParam = params.get("enemy_ids");
+    const spawnId = params.get("spawn_id");
+
+    const backBtn = document.getElementById("back-btn");
+
+    if (charId && enemyIdsParam) {
+        const enemyIdsArray = enemyIdsParam
+            .split(",")
+            .map(x => parseInt(x.trim()))
+            .filter(x => !isNaN(x));
+
+        startBattle(charId, enemyIdsArray, spawnId);
+    } else {
+        appendLog("No hay datos de batalla. Esta pantalla se abre desde el mundo.");
+        backBtn.style.display = "inline-block";
+    }
+});
+</script>
+
+</body>
+</html>

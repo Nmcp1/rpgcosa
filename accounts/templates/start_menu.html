@@ -1,0 +1,256 @@
+<!-- start_menu.html -->
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>RPGloco – Menú de inicio</title>
+    <style>
+        body {
+            margin: 0;
+            font-family: Arial, sans-serif;
+            background: radial-gradient(circle at top, #333, #111);
+            color: #fff;
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        .wrapper {
+            background: rgba(0,0,0,0.7);
+            border-radius: 16px;
+            padding: 25px 35px;
+            box-shadow: 0 0 25px #000;
+            width: 720px;
+            max-width: 95vw;
+        }
+        h1 { text-align: center; margin-top: 0; }
+        .subtitle {
+            text-align: center;
+            font-size: 14px;
+            color: #ccc;
+            margin-bottom: 20px;
+        }
+        .columns { display: flex; gap: 20px; }
+        .panel {
+            flex: 1;
+            background: #222;
+            border-radius: 12px;
+            padding: 15px 18px;
+        }
+        .panel h2 {
+            margin-top: 0;
+            font-size: 18px;
+            text-align: center;
+        }
+        label { display: block; margin-top: 8px; font-size: 13px; }
+        input {
+            width: 100%;
+            padding: 6px 8px;
+            margin-top: 3px;
+            border-radius: 6px;
+            border: 1px solid #555;
+            background: #111;
+            color: #fff;
+        }
+        .btn {
+            margin-top: 12px;
+            width: 100%;
+            padding: 8px 0;
+            border-radius: 8px;
+            border: none;
+            background: #28a745;
+            color: #fff;
+            font-weight: bold;
+            cursor: pointer;
+        }
+        .btn:hover { background: #34c759; }
+        .btn[disabled] {
+            opacity: .5;
+            cursor: not-allowed;
+        }
+        .error { color: #ff6666; font-size: 12px; margin-top: 4px; }
+        .top-right { position: fixed; right: 12px; top: 8px; font-size: 13px; }
+        a { color: #ffcc66; }
+        .actions-auth {
+            margin-top: 18px;
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+        .actions-auth a.btn-link {
+            padding: 8px 14px;
+            border-radius: 8px;
+            background: #444;
+            text-decoration: none;
+            font-size: 14px;
+            color: #fff;
+        }
+        .actions-auth a.btn-link:hover { background: #666; }
+
+        .lives-box{
+            margin: 14px auto 0;
+            padding: 12px 14px;
+            background: #1b1b1b;
+            border: 1px solid #333;
+            border-radius: 10px;
+            max-width: 520px;
+        }
+        .warn{ color:#ff6b6b; margin-top:6px; }
+        .muted{ color:#bbb; margin-top:6px; font-size:13px; }
+        .mono{ font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; }
+    </style>
+</head>
+<body>
+
+<div class="top-right">
+    {% if request.user.is_authenticated %}
+        Logueado como <strong>{{ request.user.username }}</strong> |
+        <a href="{% url 'logout' %}">Cerrar sesión</a>
+    {% endif %}
+</div>
+
+<div class="wrapper">
+    <h1>RPGloco</h1>
+    <div class="subtitle">
+        MMORPG single-player/co-op con combate automático y dificultad alta
+    </div>
+
+    {% if user_is_authenticated %}
+        {% if has_character %}
+
+            <div class="lives-box">
+                <div><strong>Vidas:</strong> {{ lives|default:"?" }}/3</div>
+
+                {% if no_lives %}
+                    <div class="warn">
+                        No puedes jugar: te quedaste sin vidas. Te enviamos a <strong>0-0</strong>.
+                    </div>
+                    <div class="muted">
+                        Próxima vida en: <span id="life-timer" class="mono">--:--</span>
+                    </div>
+                {% else %}
+                    {% if seconds_to_next_life and seconds_to_next_life > 0 %}
+                        <div class="muted">
+                            Próxima vida en: <span id="life-timer" class="mono">--:--</span>
+                        </div>
+                    {% endif %}
+                {% endif %}
+            </div>
+
+            <p style="text-align:center; margin-top:14px;">
+                Ya tienes un personaje creado. ¿Listo para entrar al mundo?
+            </p>
+
+            <div class="actions-auth">
+                {% if no_lives %}
+                    <button class="btn" disabled style="width:220px;">Entrar al mundo</button>
+                {% else %}
+                    <a class="btn-link" href="{% url 'world_page' %}">Entrar al mundo</a>
+                {% endif %}
+                <a class="btn-link" href="{% url 'inventory_page' %}">Inventario</a>
+            </div>
+
+            <script>
+                (function(){
+                    const hasTimer = {{ seconds_to_next_life|default:0 }};
+                    if(!hasTimer || hasTimer <= 0) return;
+
+                    let secs = parseInt("{{ seconds_to_next_life|default:0 }}", 10) || 0;
+                    const el = document.getElementById("life-timer");
+                    if(!el) return;
+
+                    function fmt(s){
+                        s = Math.max(0, s);
+                        const m = Math.floor(s/60);
+                        const r = s%60;
+                        return String(m).padStart(2,'0') + ":" + String(r).padStart(2,'0');
+                    }
+
+                    function tick(){
+                        el.textContent = fmt(secs);
+                        if(secs <= 0){
+                            // recarga para que el backend regenere y habilite entrar
+                            location.reload();
+                            return;
+                        }
+                        secs -= 1;
+                        setTimeout(tick, 1000);
+                    }
+                    tick();
+                })();
+            </script>
+
+        {% else %}
+            <p style="text-align:center;">
+                Estás logueado pero aún no tienes personaje. Crea uno para comenzar.
+            </p>
+            <div class="actions-auth">
+                <a class="btn-link" href="{% url 'create_character_form' %}">Crear personaje</a>
+            </div>
+        {% endif %}
+    {% else %}
+
+        <div class="columns">
+            <!-- LOGIN -->
+            <div class="panel">
+                <h2>Iniciar sesión</h2>
+                <form method="post">
+                    {% csrf_token %}
+                    <input type="hidden" name="form_type" value="login">
+
+                    {{ login_form.non_field_errors }}
+                    <label for="id_username">Usuario</label>
+                    {{ login_form.username }}
+                    {% if login_form.username.errors %}
+                        <div class="error">{{ login_form.username.errors.0 }}</div>
+                    {% endif %}
+
+                    <label for="id_password">Contraseña</label>
+                    {{ login_form.password }}
+                    {% if login_form.password.errors %}
+                        <div class="error">{{ login_form.password.errors.0 }}</div>
+                    {% endif %}
+
+                    <button type="submit" class="btn">Entrar</button>
+                </form>
+            </div>
+
+            <!-- REGISTRO -->
+            <div class="panel">
+                <h2>Crear cuenta</h2>
+                <form method="post">
+                    {% csrf_token %}
+                    <input type="hidden" name="form_type" value="register">
+
+                    <label>Nombre de usuario</label>
+                    <input type="text" name="username" required>
+                    {% if register_errors.username %}
+                        <div class="error">{{ register_errors.username }}</div>
+                    {% endif %}
+
+                    <label>Contraseña</label>
+                    <input type="password" name="password1" required>
+
+                    <label>Repetir contraseña</label>
+                    <input type="password" name="password2" required>
+                    {% if register_errors.password %}
+                        <div class="error">{{ register_errors.password }}</div>
+                    {% endif %}
+
+                    <label>Código de invitación</label>
+                    <input type="text" name="invitation_code" required>
+                    {% if register_errors.invitation_code %}
+                        <div class="error">{{ register_errors.invitation_code }}</div>
+                    {% endif %}
+
+                    <button type="submit" class="btn">Registrarse</button>
+                </form>
+            </div>
+        </div>
+
+    {% endif %}
+</div>
+
+</body>
+</html>

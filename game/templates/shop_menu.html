@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Tienda – RPGloco</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background: #1b1b2f;
+            color: #f1f1f1;
+            margin: 0;
+            padding: 0;
+        }
+        .container {
+            max-width: 900px;
+            margin: 40px auto;
+            background: #222831;
+            border-radius: 10px;
+            padding: 20px 30px;
+            box-shadow: 0 0 15px rgba(0,0,0,0.5);
+        }
+        h1, h2 {
+            text-align: center;
+        }
+        .character-box {
+            display: flex;
+            gap: 20px;
+            margin-bottom: 30px;
+            background: #323946;
+            padding: 15px;
+            border-radius: 10px;
+        }
+        .char-avatar {
+            width: 96px;
+            height: 96px;
+            border-radius: 10px;
+            background: #444;
+            object-fit: cover;
+        }
+        .char-info p {
+            margin: 4px 0;
+        }
+        .menu-grid {
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+            flex-wrap: wrap;
+        }
+        .menu-card {
+            background: #323946;
+            padding: 20px;
+            border-radius: 10px;
+            width: 260px;
+            text-align: center;
+            box-shadow: 0 0 10px rgba(0,0,0,0.4);
+        }
+        .menu-card h3 {
+            margin-top: 0;
+        }
+        .btn {
+            display: inline-block;
+            margin-top: 12px;
+            padding: 10px 18px;
+            border-radius: 6px;
+            border: none;
+            cursor: pointer;
+            font-size: 15px;
+            text-decoration: none;
+            color: #fff;
+        }
+        .btn-primary {
+            background: #ff9800;
+        }
+        .btn-primary:hover {
+            background: #e68900;
+        }
+        .btn-secondary {
+            background: #4caf50;
+        }
+        .btn-secondary:hover {
+            background: #3e8e41;
+        }
+        .footer-actions {
+            text-align: center;
+            margin-top: 30px;
+        }
+        .btn-back {
+            background: #607d8b;
+        }
+        .btn-back:hover {
+            background: #546e7a;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>Tienda</h1>
+
+    <div class="character-box">
+        <div>
+            {% if character.image %}
+                <img src="{{ character.image.url }}" alt="Personaje" class="char-avatar">
+            {% else %}
+                <img src="https://via.placeholder.com/96x96?text=PJ" alt="Personaje" class="char-avatar">
+            {% endif %}
+        </div>
+        <div class="char-info">
+            <h2>{{ character.name }}</h2>
+            <p><strong>Clase:</strong> {{ character.char_class }}</p>
+            <p><strong>Nivel:</strong> {{ character.level }}</p>
+            <p><strong>Monedas:</strong> {{ character.coins }}</p>
+            <p><strong>Orbes:</strong>
+                Bronce {{ character.orbs_bronze }} ·
+                Plata {{ character.orbs_silver }} ·
+                Oro {{ character.orbs_gold }}
+            </p>
+        </div>
+    </div>
+
+    <div class="menu-grid">
+        <div class="menu-card">
+            <h3>Gacha</h3>
+            <p>Gasta monedas para obtener equipamiento de distintas rarezas.</p>
+            <a href="{% url 'gacha_page' %}" class="btn btn-primary">Ir al Gacha</a>
+        </div>
+
+        <div class="menu-card">
+            <h3>Vender orbes</h3>
+            <p>Convierte tus orbes de bronce, plata y oro en monedas.</p>
+            <a href="{% url 'shop_sell_page' %}" class="btn btn-secondary">Ir a la venta</a>
+        </div>
+    </div>
+
+    <div class="footer-actions">
+        <a href="{% url 'world_page' %}" class="btn btn-back">Volver al mundo</a>
+    </div>
+</div>
+
+</body>
+</html>

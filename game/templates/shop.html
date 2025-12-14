@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Tienda – Venta de Orbes</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background: #151515;
+            color: #f1f1f1;
+            margin: 0;
+            padding: 0;
+        }
+        .container {
+            max-width: 900px;
+            margin: 40px auto;
+            background: #202020;
+            border-radius: 10px;
+            padding: 20px 30px;
+            box-shadow: 0 0 15px rgba(0,0,0,0.6);
+        }
+        h1, h2 {
+            text-align: center;
+        }
+        .character-box {
+            display: flex;
+            gap: 20px;
+            background: #262626;
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+        }
+        .char-avatar {
+            width: 96px;
+            height: 96px;
+            border-radius: 10px;
+            object-fit: cover;
+            background: #444;
+        }
+        .char-info p {
+            margin: 4px 0;
+        }
+        .info-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 8px;
+        }
+        .panel {
+            background: #262626;
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+        }
+        .row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin: 6px 0;
+        }
+        .row span {
+            flex: 1;
+        }
+        .row input {
+            width: 80px;
+        }
+        button {
+            cursor: pointer;
+            border: none;
+            border-radius: 6px;
+            padding: 8px 14px;
+            background: #ff9800;
+            color: #fff;
+            font-size: 14px;
+        }
+        button:hover {
+            background: #e68900;
+        }
+        #messages {
+            margin-top: 10px;
+            white-space: pre-wrap;
+        }
+        .footer-actions {
+            margin-top: 20px;
+            text-align: center;
+        }
+        .btn-menu {
+            background: #607d8b;
+        }
+        .btn-menu:hover {
+            background: #546e7a;
+        }
+        .btn-world {
+            background: #4caf50;
+        }
+        .btn-world:hover {
+            background: #3e8e41;
+        }
+        .small {
+            font-size: 13px;
+            color: #ccc;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>Tienda – Venta de Orbes</h1>
+
+    <div class="character-box">
+        <div>
+            {% if character.image %}
+                <img src="{{ character.image.url }}" alt="Personaje" class="char-avatar">
+            {% else %}
+                <img src="https://via.placeholder.com/96x96?text=PJ" alt="Personaje" class="char-avatar">
+            {% endif %}
+        </div>
+        <div class="char-info">
+            <p><strong>Nombre:</strong> <span id="char-name">{{ character.name }}</span></p>
+            <p><strong>Clase:</strong> {{ character.char_class }}</p>
+            <p><strong>Nivel:</strong> {{ character.level }}</p>
+            <p><strong>Monedas:</strong> <span id="coins">{{ character.coins }}</span></p>
+            <p><strong>Orbes:</strong>
+                Bronce <span id="orbs-bronze">{{ character.orbs_bronze }}</span> ·
+                Plata <span id="orbs-silver">{{ character.orbs_silver }}</span> ·
+                Oro <span id="orbs-gold">{{ character.orbs_gold }}</span>
+            </p>
+        </div>
+    </div>
+
+    <div class="panel">
+        <h2>Vender Orbes</h2>
+        <div class="small" id="price-info">
+            <!-- Se rellenará con los precios desde la API -->
+        </div>
+        <div class="row">
+            <span>Bronce a vender:</span>
+            <input type="number" id="sell-bronze" min="0" value="0">
+        </div>
+        <div class="row">
+            <span>Plata a vender:</span>
+            <input type="number" id="sell-silver" min="0" value="0">
+        </div>
+        <div class="row">
+            <span>Oro a vender:</span>
+            <input type="number" id="sell-gold" min="0" value="0">
+        </div>
+        <div style="text-align:center; margin-top:10px;">
+            <button onclick="sellOrbs()">Vender</button>
+        </div>
+    </div>
+
+    <div id="messages"></div>
+
+    <div class="footer-actions">
+        <a href="{% url 'shop_page' %}">
+            <button class="btn-menu">Volver a la tienda</button>
+        </a>
+        <a href="{% url 'world_page' %}">
+            <button class="btn-world">Volver al mundo</button>
+        </a>
+    </div>
+</div>
+
+<script>
+// Character ID desde Django
+const CHARACTER_ID = {{ character.id }};
+
+// -------- CSRF --------
+function getCookie(name) {
+    let cookieValue = null;
+    if (document.cookie && document.cookie !== "") {
+        const cookies = document.cookie.split(";");
+        for (let i = 0; i < cookies.length; i++) {
+            const cookie = cookies[i].trim();
+            if (cookie.substring(0, name.length + 1) === (name + "=")) {
+                cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                break;
+            }
+        }
+    }
+    return cookieValue;
+}
+const csrftoken = getCookie("csrftoken");
+
+/* -------- STATE -------- */
+let lastPrices = { bronze: 1, silver: 15, gold: 100 };
+
+/* -------- UI HELPERS -------- */
+function setMessage(text) {
+    document.getElementById("messages").innerText = text;
+}
+
+function updateShopUI(data) {
+    document.getElementById("char-name").innerText = data.character_name;
+    document.getElementById("coins").innerText = data.coins;
+    document.getElementById("orbs-bronze").innerText = data.orbs.bronze;
+    document.getElementById("orbs-silver").innerText = data.orbs.silver;
+    document.getElementById("orbs-gold").innerText = data.orbs.gold;
+
+    lastPrices = data.prices || lastPrices;
+    document.getElementById("price-info").innerText =
+        `Precios actuales:\n` +
+        `Bronce: ${lastPrices.bronze} moneda c/u\n` +
+        `Plata: ${lastPrices.silver} monedas c/u\n` +
+        `Oro: ${lastPrices.gold} monedas c/u`;
+}
+
+/* -------- API CALLS -------- */
+
+async function loadShop() {
+    setMessage("Cargando datos de tienda...");
+
+    const url = `/api/game/shop/api/?character_id=${encodeURIComponent(CHARACTER_ID)}`;
+    const response = await fetch(url, {
+        method: "GET",
+        headers: { "Accept": "application/json" },
+    });
+
+    if (!response.ok) {
+        const text = await response.text();
+        setMessage(`Error: ${response.status}\n${text}`);
+        return;
+    }
+
+    const data = await response.json();
+    updateShopUI(data);
+    setMessage("Datos cargados.");
+}
+
+async function sellOrbs() {
+    const sellBronze = parseInt(document.getElementById("sell-bronze").value || "0", 10);
+    const sellSilver = parseInt(document.getElementById("sell-silver").value || "0", 10);
+    const sellGold = parseInt(document.getElementById("sell-gold").value || "0", 10);
+
+    setMessage("Procesando venta...");
+
+    const response = await fetch("/api/game/shop/api/", {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json",
+            "X-CSRFToken": csrftoken,
+        },
+        body: JSON.stringify({
+            character_id: CHARACTER_ID,
+            sell_bronze: sellBronze,
+            sell_silver: sellSilver,
+            sell_gold: sellGold,
+        }),
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+        setMessage(`Error: ${response.status}\n${data.error || ""}`);
+        return;
+    }
+
+    document.getElementById("coins").innerText = data.coins_total;
+    document.getElementById("orbs-bronze").innerText = data.orbs_bronze;
+    document.getElementById("orbs-silver").innerText = data.orbs_silver;
+    document.getElementById("orbs-gold").innerText = data.orbs_gold;
+
+    setMessage(
+        `Venta realizada.\n` +
+        `Monedas obtenidas: ${data.coins_gained}\n` +
+        `Total actual: ${data.coins_total}`
+    );
+}
+
+// Cargar datos al entrar
+loadShop();
+</script>
+
+</body>
+</html>

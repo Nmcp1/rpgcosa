@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Gacha – RPGloco</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background: #121212;
+            color: #f1f1f1;
+            margin: 0;
+            padding: 0;
+        }
+        .container {
+            max-width: 900px;
+            margin: 40px auto;
+            background: #1f1f1f;
+            border-radius: 10px;
+            padding: 20px 30px;
+            box-shadow: 0 0 15px rgba(0,0,0,0.6);
+        }
+        h1 {
+            text-align: center;
+        }
+        .char-box {
+            display: flex;
+            gap: 20px;
+            background: #262626;
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+        }
+        .char-avatar {
+            width: 96px;
+            height: 96px;
+            border-radius: 10px;
+            object-fit: cover;
+            background: #444;
+        }
+        .char-info p {
+            margin: 4px 0;
+        }
+        .gacha-panel {
+            background: #262626;
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+        }
+        .gacha-panel label {
+            display: inline-block;
+            margin-right: 10px;
+        }
+        .gacha-panel input {
+            width: 80px;
+        }
+        button {
+            cursor: pointer;
+            border: none;
+            border-radius: 6px;
+            padding: 8px 14px;
+            background: #ff9800;
+            color: #fff;
+            font-size: 14px;
+        }
+        button:hover {
+            background: #e68900;
+        }
+        #messages {
+            margin-top: 10px;
+            white-space: pre-wrap;
+        }
+        #results {
+            margin-top: 20px;
+            background: #262626;
+            border-radius: 10px;
+            padding: 15px;
+        }
+        .item-entry {
+            border-bottom: 1px solid #444;
+            padding: 6px 0;
+        }
+        .footer-actions {
+            margin-top: 20px;
+            text-align: center;
+        }
+        .btn-menu {
+            background: #607d8b;
+        }
+        .btn-menu:hover {
+            background: #546e7a;
+        }
+        .btn-world {
+            background: #4caf50;
+        }
+        .btn-world:hover {
+            background: #3e8e41;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>Gacha</h1>
+
+    <div class="char-box">
+        <div>
+            {% if character.image %}
+                <img src="{{ character.image.url }}" alt="Personaje" class="char-avatar">
+            {% else %}
+                <img src="https://via.placeholder.com/96x96?text=PJ" alt="Personaje" class="char-avatar">
+            {% endif %}
+        </div>
+        <div class="char-info">
+            <p><strong>Nombre:</strong> <span id="char-name">{{ character.name }}</span></p>
+            <p><strong>Clase:</strong> {{ character.char_class }}</p>
+            <p><strong>Nivel:</strong> {{ character.level }}</p>
+            <p><strong>Monedas:</strong> <span id="char-coins">{{ character.coins }}</span></p>
+        </div>
+    </div>
+
+    <div class="gacha-panel">
+        <h2>Lanzar gacha</h2>
+        <p>El coste es de 20 monedas por tirada</p>
+        <label for="pulls">Número de tiradas:</label>
+        <input type="number" id="pulls" value="1" min="1" max="50">
+        <button onclick="doGacha()">Tirar</button>
+        <div id="messages"></div>
+    </div>
+
+    <div id="results">
+        <h2>Resultados</h2>
+        <div id="items-container">
+            <p>Aún no has tirado el gacha.</p>
+        </div>
+    </div>
+
+    <div class="footer-actions">
+        <a href="{% url 'shop_page' %}">
+            <button class="btn-menu">Volver a la tienda</button>
+        </a>
+        <a href="{% url 'world_page' %}">
+            <button class="btn-world">Volver al mundo</button>
+        </a>
+    </div>
+</div>
+
+<script>
+// Character ID desde el contexto de Django
+const CHARACTER_ID = {{ character.id }};
+
+// CSRF
+function getCookie(name) {
+    let cookieValue = null;
+    if (document.cookie && document.cookie !== "") {
+        const cookies = document.cookie.split(";");
+        for (let i = 0; i < cookies.length; i++) {
+            const cookie = cookies[i].trim();
+            if (cookie.substring(0, name.length + 1) === (name + "=")) {
+                cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                break;
+            }
+        }
+    }
+    return cookieValue;
+}
+const csrftoken = getCookie("csrftoken");
+
+function setMessage(text) {
+    document.getElementById("messages").innerText = text;
+}
+
+function renderItems(items) {
+    const cont = document.getElementById("items-container");
+    cont.innerHTML = "";
+    if (!items || items.length === 0) {
+        cont.innerHTML = "<p>No se obtuvieron ítems.</p>";
+        return;
+    }
+    items.forEach(item => {
+        const div = document.createElement("div");
+        div.className = "item-entry";
+        div.innerHTML = `
+            <strong>${item.name}</strong> 
+            [${item.rarity}] 
+            – Slot: ${item.slot} 
+            – Nivel: ${item.level}
+        `;
+        cont.appendChild(div);
+    });
+}
+
+async function doGacha() {
+    const pulls = parseInt(document.getElementById("pulls").value || "1", 10);
+    if (isNaN(pulls) || pulls <= 0) {
+        setMessage("El número de tiradas debe ser un entero positivo.");
+        return;
+    }
+
+    setMessage("Realizando tiradas...");
+    try {
+        const resp = await fetch("/api/game/gacha/", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "X-CSRFToken": csrftoken,
+            },
+            body: JSON.stringify({
+                character_id: CHARACTER_ID,
+                pulls: pulls,
+            }),
+        });
+
+        const data = await resp.json();
+        if (!resp.ok) {
+            setMessage("Error: " + (data.error || resp.status));
+            return;
+        }
+
+        document.getElementById("char-coins").innerText = data.coins_remaining;
+        setMessage(
+            `Tiradas: ${data.pulls}\n` +
+            `Monedas gastadas: ${data.coins_spent}\n` +
+            `Monedas restantes: ${data.coins_remaining}`
+        );
+        renderItems(data.items);
+    } catch (err) {
+        console.error(err);
+        setMessage("Error de red al llamar al gacha.");
+    }
+}
+</script>
+
+</body>
+</html>

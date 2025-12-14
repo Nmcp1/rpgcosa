@@ -1,0 +1,659 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Inventario – RPGloco</title>
+    {% load static %}
+    <style>
+        /* ====== Layout compacto (sin scroll de página) ====== */
+        html, body {
+            height: 100%;
+            overflow: hidden; /* evita scroll de página */
+        }
+        body {
+            font-family: Arial, sans-serif;
+            background: #222;
+            color: #fff;
+            margin: 0;
+            padding: 10px;
+            font-size: 13px;
+        }
+
+        .top-bar {
+            display: grid;
+            grid-template-columns: 160px 1fr 160px;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 8px;
+        }
+
+        h1 {
+            text-align: center;
+            margin: 0;
+            font-size: 16px;
+            font-weight: 700;
+        }
+
+        .back-btn {
+            padding: 6px 10px;
+            background: #555;
+            border-radius: 8px;
+            color: #fff;
+            text-decoration: none;
+            display: inline-block;
+            width: fit-content;
+        }
+        .back-btn:hover { background: #777; }
+
+        .layout {
+            height: calc(100vh - 56px); /* top-bar + padding */
+            display: grid;
+            grid-template-columns: 300px 1fr;
+            gap: 10px;
+        }
+
+        #character-info, #item-list {
+            background: #333;
+            padding: 10px;
+            border-radius: 12px;
+            box-shadow: 0 0 10px #000;
+            height: 100%;
+            overflow: hidden;
+        }
+
+        #character-info h2, #item-list h2 {
+            margin: 0 0 8px 0;
+            text-align: center;
+            font-size: 14px;
+        }
+
+        .char-card {
+            display: grid;
+            grid-template-columns: 72px 1fr;
+            gap: 10px;
+            align-items: center;
+        }
+
+        .char-image {
+            width: 72px;
+            height: 72px;
+            border-radius: 12px;
+            object-fit: cover;
+            border: 2px solid #555;
+            background: #111;
+        }
+
+        .char-card p {
+            margin: 2px 0;
+            line-height: 1.2;
+        }
+
+        .muted { color: #bbb; font-size: 11px; }
+
+        .section {
+            margin-top: 10px;
+            padding-top: 8px;
+            border-top: 1px solid #444;
+        }
+
+        .char-total ul {
+            padding-left: 18px;
+            margin: 6px 0 0 0;
+        }
+        .char-total li { margin: 2px 0; }
+
+        /* ====== Equipados (panel izquierdo) ====== */
+        #equipped-container {
+            margin-top: 8px;
+            display: grid;
+            gap: 6px;
+            max-height: calc(100% - 220px);
+            overflow: auto; /* si hay muchos equipados */
+            padding-right: 4px;
+        }
+
+        .eq-item {
+            background: #2b2b2b;
+            border-radius: 10px;
+            border-left: 6px solid #777;
+            padding: 6px 8px;
+            display: grid;
+            grid-template-columns: 36px 1fr;
+            gap: 8px;
+            align-items: center;
+        }
+
+        .eq-thumb {
+            width: 36px;
+            height: 36px;
+            border-radius: 10px;
+            border: 2px solid #555;
+            background: #111;
+            object-fit: cover;
+        }
+
+        .eq-meta {
+            line-height: 1.15;
+        }
+        .eq-meta strong { font-size: 12px; }
+        .eq-meta .mini { font-size: 11px; color: #ddd; }
+
+        /* ====== Filtros ====== */
+        .filters {
+            display: grid;
+            grid-template-columns: 1fr 1fr auto;
+            gap: 8px;
+            align-items: center;
+            margin-bottom: 8px;
+            padding: 8px;
+            background: #2c2c2c;
+            border-radius: 12px;
+            border: 1px solid #444;
+        }
+        .filters label { font-size: 12px; color: #ddd; }
+
+        .filters select {
+            width: 100%;
+            background: #111;
+            color: #fff;
+            border: 1px solid #555;
+            border-radius: 10px;
+            padding: 6px 10px;
+            outline: none;
+        }
+
+        .filters .right {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            justify-content: flex-end;
+        }
+
+        .checkbox {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 12px;
+            color: #ddd;
+            user-select: none;
+            white-space: nowrap;
+        }
+
+        /* ====== Lista items (scroll interno, no página) ====== */
+        #items-container {
+            height: calc(100% - 74px); /* titulo + filtros */
+            overflow-y: auto;
+            padding-right: 6px;
+        }
+
+        .item-entry {
+            padding: 8px;
+            border-bottom: 1px solid #444;
+            display: grid;
+            grid-template-columns: 44px 1fr auto;
+            gap: 10px;
+            align-items: center;
+
+            border-left: 6px solid #777;
+            border-radius: 12px;
+            margin-bottom: 8px;
+            background: #2f2f2f;
+        }
+        .item-entry:last-child { border-bottom: none; }
+
+        .equipped { background: #1f3b1f; }
+
+        .item-thumb {
+            width: 44px;
+            height: 44px;
+            border-radius: 12px;
+            border: 2px solid #555;
+            background: #111;
+            object-fit: cover;
+        }
+
+        .item-meta strong { font-size: 13px; }
+        .item-meta .line { margin-top: 2px; font-size: 12px; color: #eaeaea; }
+
+        .rarity-badge {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 999px;
+            font-size: 11px;
+            margin-left: 6px;
+            border: 1px solid #555;
+            background: rgba(0,0,0,0.25);
+            vertical-align: middle;
+        }
+
+        button {
+            padding: 6px 10px;
+            font-size: 12px;
+            background: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+        }
+        button:hover { background: #45A049; }
+
+        .unequip-btn { background: #d9534f; }
+        .unequip-btn:hover { background: #c9302c; }
+
+        .btn-col { display:flex; flex-direction: column; align-items: flex-end; gap: 6px; }
+
+        /* ====== Colores por rareza ====== */
+        .rarity-basic     { border-left-color: #9aa0a6; }  /* gris */
+        .rarity-uncommon  { border-left-color: #2ecc71; }  /* verde */
+        .rarity-rare      { border-left-color: #3498db; }  /* azul */
+        .rarity-epic      { border-left-color: #9b59b6; }  /* morado */
+        .rarity-legendary { border-left-color: #f1c40f; }  /* dorado */
+        .rarity-mythic    { border-left-color: #e74c3c; }  /* rojo */
+        .rarity-ascended  { border-left-color: #ff69b4; }  /* rosa */
+
+        .rarity-badge.rarity-basic     { color: #d0d3d4; border-color:#9aa0a6; }
+        .rarity-badge.rarity-uncommon  { color: #7dffb0; border-color:#2ecc71; }
+        .rarity-badge.rarity-rare      { color: #86c8ff; border-color:#3498db; }
+        .rarity-badge.rarity-epic      { color: #d9a7ff; border-color:#9b59b6; }
+        .rarity-badge.rarity-legendary { color: #ffe58a; border-color:#f1c40f; }
+        .rarity-badge.rarity-mythic    { color: #ff9b91; border-color:#e74c3c; }
+        .rarity-badge.rarity-ascended  { color: #ffc0df; border-color:#ff69b4; }
+
+        /* pequeños detalles */
+        .pill {
+            font-size: 11px;
+            color: #bbb;
+            text-align: right;
+            white-space: nowrap;
+        }
+    </style>
+</head>
+<body>
+
+<div class="top-bar">
+    <a href="{% url 'world_page' %}" class="back-btn">← Volver</a>
+    <h1>Inventario del Personaje</h1>
+    <div></div>
+</div>
+
+<div class="layout">
+    <!-- PANEL IZQUIERDO -->
+    <div id="character-info">
+        <h2>Personaje</h2>
+
+        <div class="char-card">
+            <img
+                class="char-image"
+                src="{% if character.image %}{{ character.image.url }}{% else %}{% static 'default_character.png' %}{% endif %}"
+                alt="Imagen del personaje"
+            >
+            <div>
+                <p><strong>{{ character.name }}</strong></p>
+                <p>Clase: {{ character.get_char_class_display }}</p>
+                <p>Nivel: {{ character.level }}</p>
+            </div>
+        </div>
+
+        <!-- ✅ Solo stats totales -->
+        <div class="section char-total">
+            <p style="margin:0;"><strong>Stats totales (con equipo):</strong></p>
+            <div class="muted">Se recalcula al equipar / quitar.</div>
+            <ul>
+                <li>HP: <span id="total-hp">-</span></li>
+                <li>ATK: <span id="total-atk">-</span></li>
+                <li>DEF: <span id="total-def">-</span></li>
+                <li>Velocidad: <span id="total-speed">-</span></li>
+            </ul>
+        </div>
+
+        <!-- ✅ Equipamiento equipado en el espacio libre -->
+        <div class="section">
+            <p style="margin:0 0 6px 0;"><strong>Equipamiento equipado</strong></p>
+            <div class="muted">Solo lo que está puesto actualmente.</div>
+            <div id="equipped-container"></div>
+        </div>
+    </div>
+
+    <!-- PANEL DERECHO -->
+    <div id="item-list">
+        <h2>Equipamiento</h2>
+
+        <div class="filters">
+            <div>
+                <label for="rarity-filter"><strong>Rareza</strong></label>
+                <select id="rarity-filter">
+                    <option value="all">Todas</option>
+                    <option value="basic">Basic</option>
+                    <option value="uncommon">Uncommon</option>
+                    <option value="rare">Rare</option>
+                    <option value="epic">Epic</option>
+                    <option value="legendary">Legendary</option>
+                    <option value="mythic">Mythic</option>
+                    <option value="ascended">Ascended</option>
+                </select>
+            </div>
+
+            <div>
+                <label for="type-filter"><strong>Tipo / Slot</strong></label>
+                <select id="type-filter">
+                    <option value="all">Todos</option>
+                    <option value="helmet">Casco</option>
+                    <option value="chest">Pechera</option>
+                    <option value="pants">Pantalones</option>
+                    <option value="boots">Botas</option>
+                    <option value="main_hand">Mano Principal</option>
+                    <option value="off_hand">Mano Secundaria</option>
+                    <option value="amulet">Amuleto</option>
+                    <option value="ring">Anillo</option>
+                    <option value="pet">Mascota</option>
+                </select>
+            </div>
+
+            <div class="right">
+                <label class="checkbox">
+                    <input type="checkbox" id="show-equipped" checked />
+                    Mantener equipados visibles
+                </label>
+                <div class="pill" id="items-count">-</div>
+            </div>
+        </div>
+
+        <div id="items-container"></div>
+    </div>
+</div>
+
+<script>
+    const CHARACTER_ID = {{ character.id }};
+
+    // ✅ NUEVO: base para estáticos (Django)
+    const STATIC_URL = "{% static '' %}";
+
+    // ✅ NUEVO: mapping slot -> imagen en /static/items/
+    const SLOT_IMAGE = {
+        helmet: "helmet.png",
+        chest: "chest.png",
+        pants: "pants.png",
+        boots: "boots.png",
+        main_hand: "main_hand.png",
+        off_hand: "off_hand.png",
+        amulet: "amulet.png",
+        ring: "ring.png",
+        pet: "pet.png",
+    };
+
+    function getItemImgSrc(item) {
+        const slot = normalizeSlot(item.slot);
+        const filename = SLOT_IMAGE[slot];
+        if (filename) return `${STATIC_URL}items/${filename}`;
+        return "{% static 'img/item_placeholder.png' %}";
+    }
+
+    // Base stats desde el HTML (los dejamos “invisibles” pero usados para el total)
+    const baseStats = {
+        hp: Number({{ character.base_hp|default:0 }}),
+        atk: Number({{ character.base_atk|default:0 }}),
+        def: Number({{ character.base_def|default:0 }}),
+        speed: Number({{ character.base_speed|default:0 }}),
+    };
+
+    let lastItems = [];
+
+    const raritySelect = document.getElementById("rarity-filter");
+    const typeSelect = document.getElementById("type-filter");
+    const showEquippedChk = document.getElementById("show-equipped");
+    const itemsCountEl = document.getElementById("items-count");
+
+    const RARITY_CLASS = {
+        basic: "rarity-basic",
+        uncommon: "rarity-uncommon",
+        rare: "rarity-rare",
+        epic: "rarity-epic",
+        legendary: "rarity-legendary",
+        mythic: "rarity-mythic",
+        ascended: "rarity-ascended",
+    };
+
+    // Mayor = mejor (para ordenar desc)
+    const RARITY_RANK = {
+        basic: 1,
+        uncommon: 2,
+        rare: 3,
+        epic: 4,
+        legendary: 5,
+        mythic: 6,
+        ascended: 7,
+    };
+
+    function normalizeRarity(r) {
+        return String(r || "").trim().toLowerCase();
+    }
+    function normalizeSlot(s) {
+        return String(s || "").trim().toLowerCase();
+    }
+
+    function sortItemsForDisplay(items) {
+        // 1) rareza desc 2) equipados primero 3) nivel desc 4) id desc (estable)
+        return items.slice().sort((a, b) => {
+            const ra = RARITY_RANK[normalizeRarity(a.rarity)] || 0;
+            const rb = RARITY_RANK[normalizeRarity(b.rarity)] || 0;
+            if (rb !== ra) return rb - ra;
+
+            const ea = a.is_equipped ? 1 : 0;
+            const eb = b.is_equipped ? 1 : 0;
+            if (eb !== ea) return eb - ea;
+
+            const la = Number(a.level || 1);
+            const lb = Number(b.level || 1);
+            if (lb !== la) return lb - la;
+
+            return Number(b.id || 0) - Number(a.id || 0);
+        });
+    }
+
+    function applyFiltersAndRender() {
+        const selectedRarity = raritySelect.value; // all / rareza
+        const selectedType = typeSelect.value;     // all / slot
+        const keepEquipped = showEquippedChk.checked;
+
+        const sorted = sortItemsForDisplay(lastItems);
+
+        const filtered = sorted.filter(it => {
+            const r = normalizeRarity(it.rarity);
+            const s = normalizeSlot(it.slot);
+
+            const rarityOk = (selectedRarity === "all") || (r === selectedRarity);
+            const typeOk = (selectedType === "all") || (s === selectedType);
+
+            const matches = rarityOk && typeOk;
+
+            // si no calza el filtro, pero es equipado y keepEquipped está activo, se mantiene
+            if (!matches && keepEquipped && it.is_equipped) return true;
+            return matches;
+        });
+
+        renderItems(filtered);
+        renderEquippedPanel(sorted.filter(x => x.is_equipped));
+
+        itemsCountEl.textContent = `Mostrando ${filtered.length}/${lastItems.length}`;
+    }
+
+    // -------- CARGAR INVENTARIO --------
+    async function loadInventory() {
+        try {
+            const resp = await fetch(`/api/game/inventory/api/?character_id=${CHARACTER_ID}`);
+            if (!resp.ok) {
+                console.error("Error al cargar inventario", resp.status);
+                return;
+            }
+            const items = await resp.json();
+            lastItems = Array.isArray(items) ? items : [];
+
+            updateTotalStats(lastItems);
+            applyFiltersAndRender();
+        } catch (e) {
+            console.error("Fallo al cargar inventario:", e);
+        }
+    }
+
+    // -------- CALCULAR STATS TOTALES --------
+    function updateTotalStats(items) {
+        let bHp = 0, bAtk = 0, bDef = 0, bSpd = 0;
+
+        for (const it of items) {
+            if (!it.is_equipped) continue;
+            bHp += Number(it.bonus_hp || 0);
+            bAtk += Number(it.bonus_atk || 0);
+            bDef += Number(it.bonus_def || 0);
+            bSpd += Number(it.bonus_speed || 0);
+        }
+
+        document.getElementById("total-hp").textContent = `${baseStats.hp + bHp} ( +${bHp} )`;
+        document.getElementById("total-atk").textContent = `${baseStats.atk + bAtk} ( +${bAtk} )`;
+        document.getElementById("total-def").textContent = `${baseStats.def + bDef} ( +${bDef} )`;
+        document.getElementById("total-speed").textContent = `${baseStats.speed + bSpd} ( +${bSpd} )`;
+    }
+
+    // -------- EQUIPAR / DESEQUIPAR --------
+    async function toggleEquip(itemId, equipFlag) {
+        try {
+            const resp = await fetch("/api/game/equipment/equip/", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "X-CSRFToken": getCSRF()
+                },
+                body: JSON.stringify({
+                    character_id: CHARACTER_ID,
+                    item_id: itemId,
+                    equip: equipFlag
+                })
+            });
+
+            const data = await resp.json();
+            if (!resp.ok) {
+                alert(data.error || "Error al equipar/desequipar");
+                return;
+            }
+
+            loadInventory();
+        } catch (e) {
+            console.error("Error en toggleEquip:", e);
+        }
+    }
+
+    // -------- RENDERIZAR ITEMS --------
+    function renderItems(items) {
+        const cont = document.getElementById("items-container");
+        cont.innerHTML = "";
+
+        if (!items || items.length === 0) {
+            cont.innerHTML = "<p class='muted'>No hay items que calcen con el filtro.</p>";
+            return;
+        }
+
+        items.forEach(item => {
+            const div = document.createElement("div");
+
+            const r = normalizeRarity(item.rarity);
+            const rarityClass = RARITY_CLASS[r] || "rarity-basic";
+
+            div.className = `item-entry ${rarityClass}` + (item.is_equipped ? " equipped" : "");
+
+            // ✅ CAMBIO: imagen por slot desde static/items/<slot>.png
+            const imgSrc = getItemImgSrc(item);
+
+            const rarityLabel = r ? r : "-";
+            const slotLabel = item.slot ? item.slot : "-";
+
+            div.innerHTML = `
+                <img class="item-thumb" src="${imgSrc}" alt="item">
+                <div class="item-meta">
+                    <strong>${escapeHtml(item.name || "Item")}</strong>
+                    <span class="rarity-badge ${rarityClass}">${escapeHtml(rarityLabel)}</span>
+                    <div class="line">Slot: ${escapeHtml(slotLabel)} · Nivel: ${Number(item.level || 1)}</div>
+                    <div class="line">HP:+${Number(item.bonus_hp || 0)} ATK:+${Number(item.bonus_atk || 0)} DEF:+${Number(item.bonus_def || 0)} SPD:+${Number(item.bonus_speed || 0)}</div>
+                </div>
+                <div class="btn-col">
+                    ${
+                        item.is_equipped
+                            ? `<button class="unequip-btn" onclick="toggleEquip(${item.id}, false)">Quitar</button>`
+                            : `<button onclick="toggleEquip(${item.id}, true)">Equipar</button>`
+                    }
+                </div>
+            `;
+
+            cont.appendChild(div);
+        });
+    }
+
+    // -------- PANEL EQUIPADOS (izquierda) --------
+    function renderEquippedPanel(equippedItems) {
+        const cont = document.getElementById("equipped-container");
+        cont.innerHTML = "";
+
+        if (!equippedItems || equippedItems.length === 0) {
+            cont.innerHTML = "<div class='muted'>No tienes nada equipado.</div>";
+            return;
+        }
+
+        const sorted = sortItemsForDisplay(equippedItems);
+
+        sorted.forEach(item => {
+            const r = normalizeRarity(item.rarity);
+            const rarityClass = RARITY_CLASS[r] || "rarity-basic";
+
+            // ✅ CAMBIO: imagen por slot desde static/items/<slot>.png
+            const imgSrc = getItemImgSrc(item);
+
+            const slotLabel = item.slot ? item.slot : "-";
+
+            const row = document.createElement("div");
+            row.className = `eq-item ${rarityClass}`;
+            row.innerHTML = `
+                <img class="eq-thumb" src="${imgSrc}" alt="eq">
+                <div class="eq-meta">
+                    <div>
+                        <strong>${escapeHtml(item.name || "Item")}</strong>
+                        <span class="rarity-badge ${rarityClass}">${escapeHtml(r || "-")}</span>
+                    </div>
+                    <div class="mini">Slot: ${escapeHtml(slotLabel)} · Lv ${Number(item.level || 1)}</div>
+                </div>
+            `;
+            cont.appendChild(row);
+        });
+    }
+
+    function escapeHtml(s) {
+        return String(s)
+            .replaceAll("&", "&amp;")
+            .replaceAll("<", "&lt;")
+            .replaceAll(">", "&gt;")
+            .replaceAll('"', "&quot;")
+            .replaceAll("'", "&#039;");
+    }
+
+    // -------- CSRF --------
+    function getCSRF() {
+        const name = "csrftoken=";
+        const decodedCookie = decodeURIComponent(document.cookie || "");
+        const cookies = decodedCookie.split(";");
+        for (let c of cookies) {
+            c = c.trim();
+            if (c.indexOf(name) === 0) {
+                return c.substring(name.length, c.length);
+            }
+        }
+        return "";
+    }
+
+    // -------- EVENTOS FILTRO --------
+    raritySelect.addEventListener("change", applyFiltersAndRender);
+    typeSelect.addEventListener("change", applyFiltersAndRender);
+    showEquippedChk.addEventListener("change", applyFiltersAndRender);
+
+    // -------- INICIAR --------
+    loadInventory();
+</script>
+
+</body>
+</html>
