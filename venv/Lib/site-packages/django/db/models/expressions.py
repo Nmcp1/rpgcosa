@@ -425,7 +425,7 @@ class BaseExpression:
         clone = self.copy()
         clone.set_source_expressions(
             [
-                None if expr is None else expr.replace_expressions(replacements)
+                expr.replace_expressions(replacements) if expr else None
                 for expr in source_expressions
             ]
         )
