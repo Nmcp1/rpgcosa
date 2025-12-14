@@ -27,4 +27,4 @@ EXPOSE 8000
 # 1) migraciones
 # 2) collectstatic (en runtime, no en build)
 # 3) gunicorn
-CMD ["sh", "-c", "python manage.py migrate --noinput && python manage.py collectstatic --noinput && gunicorn noteboard.wsgi:application --bind 0.0.0.0:8000"]
+CMD ["sh", "-c", "python manage.py migrate --noinput && python manage.py collectstatic --noinput && gunicorn rpgloco.wsgi:application --bind 0.0.0.0:8000"]
