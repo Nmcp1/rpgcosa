@@ -34,21 +34,6 @@
 
     .position-label{ position:fixed; bottom:5px; left:10px; font-size:12px; color:#ccc; z-index:10; }
 
-    /* Mini-mapa (cruz 3x3, usamos solo 5 celdas) */
-    .minimap{
-      position:fixed;
-      right:10px;
-      bottom:10px;
-      width:126px;
-      height:126px;
-      display:grid;
-      grid-template-columns:repeat(3, 1fr);
-      grid-template-rows:repeat(3, 1fr);
-      gap:6px;
-      z-index:10;
-      opacity:0.95;
-      pointer-events:none;
-    }
     .mini-cell{
       border:2px solid #555;
       background:rgba(0,0,0,0.35);
@@ -113,21 +98,6 @@
 </div>
 
 <div class="position-label" id="position-label">Posición: (0, 0)</div>
-
-<!-- Mini-mapa cruz -->
-<div class="minimap" id="minimap">
-  <div class="mini-cell empty"></div>
-  <div class="mini-cell" data-zone="north">N</div>
-  <div class="mini-cell empty"></div>
-
-  <div class="mini-cell" data-zone="west">W</div>
-  <div class="mini-cell" data-zone="center">C</div>
-  <div class="mini-cell" data-zone="east">E</div>
-
-  <div class="mini-cell empty"></div>
-  <div class="mini-cell" data-zone="south">S</div>
-  <div class="mini-cell empty"></div>
-</div>
 
 <script>
 /* ====== MAPA DINÁMICO ====== */
@@ -239,15 +209,6 @@ function updateHudXP() {
 }
 updateHudXP();
 
-/* ====== MINI MAP ====== */
-function updateMiniMap(zone) {
-  document.querySelectorAll("#minimap .mini-cell").forEach(el => {
-    const z = el.getAttribute("data-zone");
-    if (!z) return;
-    el.classList.toggle("active", z === zone);
-  });
-}
-updateMiniMap(currentZone);
 
 /* ====== OTROS JUGADORES ====== */
 let otherPlayers = [];
@@ -400,7 +361,6 @@ function syncMoveWithServer() {
     if (typeof data.zone === "string") {
       currentZone = data.zone;
       hudZone.textContent = currentZone;
-      updateMiniMap(currentZone);
     }
 
     if (data.character) {
