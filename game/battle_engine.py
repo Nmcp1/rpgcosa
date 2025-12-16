@@ -50,8 +50,9 @@ def healer_target(team):
 
 def action_attack(user, target):
     raw = user.atk
+    before = target.hp
     dmg = target.take_damage(raw)
-    return f"{user.name} ataca a {target.name} causando {dmg} daño."
+    return f"{user.name} ataca a {target.name} causando {dmg} daño. {target.name}: HP {before} -> {target.hp}"
 
 
 def action_heal(user, target):
@@ -72,13 +73,21 @@ def simulate_battle(players, enemies):
     """
     log = []
     turn = 1
+    # Random initiative to break ties consistently across turns
+    all_units = players + enemies
+    for u in all_units:
+        u.initiative = random.random()
 
     while True:
         log.append(f"--- Turno {turn} ---")
 
         ### FASE 1: PREPARACIÓN (curaciones, buffs)
         all_units = players + enemies
-        prep_order = sorted(all_units, key=lambda x: x.speed, reverse=True)
+        prep_order = sorted(
+            all_units,
+            key=lambda x: (x.speed, x.initiative),
+            reverse=True,
+        )
 
         for unit in prep_order:
             if not unit.alive:
@@ -100,7 +109,11 @@ def simulate_battle(players, enemies):
         ### FASE 3: COMBATE
         combat_order = sorted(
             all_units,
-            key=lambda x: (ROLE_ORDER.get(x.role, 99), -x.speed)
+            key=lambda x: (
+                ROLE_ORDER.get(x.role, 99),
+                -x.speed,
+                -x.initiative,
+            )
         )
 
         for unit in combat_order:
@@ -120,11 +133,13 @@ def simulate_battle(players, enemies):
 
         # Evaluar final del combate:
         if not any(p.alive for p in players):
-            log.append("¡Los jugadores han sido derrotados!")
+            defeated = ", ".join(p.name for p in players) or "El jugador"
+            log.append(f"¡{defeated} ha sido derrotado!")
             return {"result": "lose", "log": log}
 
         if not any(e.alive for e in enemies):
-            log.append("¡Los jugadores ganaron!")
+            defeated = ", ".join(e.name for e in enemies) or "El enemigo"
+            log.append(f"¡{defeated} ha sido derrotado!")
             return {"result": "win", "log": log}
 
         turn += 1

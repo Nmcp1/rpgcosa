@@ -4,6 +4,15 @@ from django.conf import settings
 from django.db import models
 from django.utils import timezone
 
+from .balance import (
+    CLASS_STATS,
+    CLASS_LEVEL_GAINS,
+    class_stats_with_level,
+    RARITY_MULTIPLIERS,
+    RARITY_STAT_MULTIPLIER,
+    xp_to_next_level,
+)
+
 
 User = settings.AUTH_USER_MODEL
 
@@ -18,14 +27,6 @@ class CharacterClass(models.TextChoices):
     HEALER = "healer", "Healer"
     APPRENTICE = "apprentice", "Aprendiz"
 
-
-# Estadísticas base por clase
-CLASS_STATS = {
-    "tank": {"hp": 100, "atk": 10, "def": 8, "speed": 1, "mana": 10},
-    "dps": {"hp": 90, "atk": 14, "def": 4, "speed": 1, "mana": 10},
-    "healer": {"hp": 80, "atk": 8, "def": 4, "speed": 1, "mana": 12},
-    "apprentice": {"hp": 95, "atk": 11, "def": 5, "speed": 1, "mana": 10},
-}
 
 
 class Character(models.Model):
@@ -80,14 +81,7 @@ class Character(models.Model):
 
     # ---- XP / nivel (ejemplo simple, ajusta a lo que ya tenías) ----
     def xp_to_next_level(self):
-        # nivel 1 → 100 xp, luego +10% cada nivel
-        if self.level == 1:
-            return 100
-        # podrías guardar esto en otro lado, aquí lo recalculo
-        base = 100
-        for _ in range(1, self.level):
-            base = int(base * 1.10)
-        return base
+        return xp_to_next_level(self.level)
 
     def gain_xp(self, amount):
         """Retorna cuántos niveles subió."""
@@ -151,6 +145,14 @@ class Character(models.Model):
 
         return {"lives": self.lives, "gained": gained, "seconds_to_next": seconds_to_next}
 
+    # ---- Base stats including level scaling ----
+    def base_stats_with_level(self):
+        """
+        Returns base stats including per-level gains for the character class.
+        Level 1 uses CLASS_STATS; each additional level adds CLASS_LEVEL_GAINS.
+        """
+        return class_stats_with_level(self.char_class, self.level)
+
 
 class EnemyType(models.Model):
     name = models.CharField(max_length=50)
@@ -169,14 +171,6 @@ class EnemyRarity(models.TextChoices):
     STRONG = "strong", "Fuerte"
     BOSS = "boss", "Jefe"
     LEGEND = "legend", "Leyenda"
-
-
-RARITY_MULTIPLIERS = {
-    "normal": 1.0,
-    "strong": 1.4,
-    "boss": 1.8,
-    "legend": 2.2,
-}
 
 
 class EnemyInstance(models.Model):
@@ -228,17 +222,6 @@ class ItemRarity(models.TextChoices):
     LEGENDARY = "legendary", "Legendaria"
     MYTHIC = "mythic", "Mítica"
     ASCENDED = "ascended", "Ascendida"
-
-
-RARITY_STAT_MULTIPLIER = {
-    "basic": 1.0,
-    "uncommon": 1.8,
-    "rare": 3.0,
-    "epic": 5.0,
-    "legendary": 8.0,
-    "mythic": 10.0,
-    "ascended": 10.0,  # ya definimos que ascendido sea x10 de básico
-}
 
 
 class EquipmentItem(models.Model):

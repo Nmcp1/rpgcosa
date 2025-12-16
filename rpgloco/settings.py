@@ -82,21 +82,38 @@ WSGI_APPLICATION = 'rpgloco.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
 
-DATABASE_URL = os.environ.get("DATABASE_URL")
+USE_SQLITE = os.environ.get("USE_SQLITE", "").lower() in ("1", "true", "yes")
 
-if DATABASE_URL:
-    u = urlparse(DATABASE_URL)
+if USE_SQLITE:
     DATABASES = {
         "default": {
+            "ENGINE": "django.db.backends.sqlite3",
+            "NAME": BASE_DIR / "db.sqlite3",
+        }
+    }
+else:
+    # Default to SQLite unless DATABASE_URL is provided (e.g. Neon/Postgres).
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.sqlite3",
+            "NAME": BASE_DIR / "db.sqlite3",
+        }
+    }
+
+    DATABASE_URL = os.environ.get("DATABASE_URL")
+    if DATABASE_URL:
+        u = urlparse(DATABASE_URL)
+        DATABASES["default"] = {
             "ENGINE": "django.db.backends.postgresql",
             "NAME": u.path.lstrip("/"),
             "USER": u.username,
             "PASSWORD": u.password,
             "HOST": u.hostname,
             "PORT": u.port or 5432,
+            "CONN_MAX_AGE": 300,  # keep-alive to avoid TLS handshake per request
+            "CONN_HEALTH_CHECKS": True,
             "OPTIONS": {"sslmode": "require"},
         }
-    }
 
 # Password validation
 # https://docs.djangoproject.com/en/5.2/ref/settings/#auth-password-validators

@@ -1,0 +1,80 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Balance Simulator</title>
+  <style>
+    body { background:#0f1115; color:#fff; font-family:Arial,sans-serif; margin:0; padding:20px; }
+    .wrap { max-width: 1100px; margin: 0 auto; background:#14171d; border:1px solid #222; border-radius:12px; padding:20px; }
+    h1 { margin-top:0; }
+    .cols { display:flex; gap:20px; flex-wrap:wrap; }
+    .panel { flex:1; min-width:320px; background:#1c2028; border-radius:10px; padding:15px; border:1px solid #2a2f3a; }
+    label { display:block; margin-top:10px; font-size:13px; color:#ccc; }
+    select, input { width:100%; padding:6px 8px; margin-top:4px; background:#0f131a; color:#fff; border:1px solid #2d333f; border-radius:6px; }
+    .slots { display:grid; grid-template-columns:repeat(auto-fit, minmax(140px, 1fr)); gap:10px; margin-top:10px; }
+    button { margin-top:16px; padding:10px 14px; background:#3b82f6; color:#fff; border:none; border-radius:8px; cursor:pointer; font-weight:bold; }
+    button:hover { background:#60a5fa; }
+    .result { margin-top:20px; background:#12151c; border:1px solid #252b36; padding:15px; border-radius:10px; }
+    .error { color:#ff8a8a; margin-top:10px; }
+    .statline { font-family: monospace; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Balance simulator (admins)</h1>
+    <p style="color:#bbb;">Configura dos combatientes y simula el resultado con las reglas actuales.</p>
+    {% if error %}<div class="error">{{ error }}</div>{% endif %}
+    <form method="post">
+      {% csrf_token %}
+      <div class="cols">
+        {% for side in sides %}
+        {% with prefix=side.prefix label=side.label %}
+        <div class="panel">
+          <h3>{{ label }}</h3>
+          <label>Clase</label>
+          <select name="{{ prefix }}_class">
+            {% for val,txt in class_choices %}
+              <option value="{{ val }}">{{ txt }}</option>
+            {% endfor %}
+          </select>
+
+          <label>Nivel</label>
+          <input type="number" name="{{ prefix }}_level" value="1" min="1" max="200">
+
+          <div class="slots">
+            {% for slot_val,slot_txt in slot_choices %}
+              <div>
+                <label>{{ slot_txt }}</label>
+                <select name="{{ prefix }}_gear_{{ slot_val }}">
+                  {% for rval,rtxt in rarity_choices %}
+                    <option value="{{ rval }}">{{ rtxt }}</option>
+                  {% endfor %}
+                </select>
+              </div>
+            {% endfor %}
+          </div>
+        </div>
+        {% endwith %}
+        {% endfor %}
+      </div>
+      <button type="submit">Simular batalla</button>
+    </form>
+
+    {% if result %}
+      <div class="result">
+        <h3>Resultado</h3>
+        <div class="statline">A: HP {{ result.b1.hp }} | ATK {{ result.b1.atk }} | DEF {{ result.b1.defense }} | SPD {{ result.b1.speed }}</div>
+        <div class="statline">B: HP {{ result.b2.hp }} | ATK {{ result.b2.atk }} | DEF {{ result.b2.defense }} | SPD {{ result.b2.speed }}</div>
+        <div style="margin-top:10px;">
+          <strong>Log:</strong>
+          {% for line in result.outcome.log %}
+            <p style="margin:4px 0; padding:4px 6px; background:#0d1016; border:1px solid #1f2530; border-radius:6px;">{{ line }}</p>
+          {% endfor %}
+          <p style="margin-top:8px; font-weight:bold;">Resultado: {{ result.outcome.result_label }}</p>
+        </div>
+      </div>
+    {% endif %}
+  </div>
+</body>
+</html>

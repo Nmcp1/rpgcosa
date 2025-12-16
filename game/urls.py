@@ -26,4 +26,7 @@ urlpatterns = [
     path("gacha/page/", gacha_page, name="gacha_page"),          # página de gacha (HTML)
     path("gacha/", GachaPullView.as_view(), name="gacha_api"),   # API de gacha
     path("equipment/equip/", EquipItemView.as_view(), name="equip_item"),
+    path("ping/", ping_status, name="ping_status"),
+    path("player/state/", player_state, name="player_state"),
+    path("admin/balance-sim/", balance_simulator, name="balance_simulator"),
 ]

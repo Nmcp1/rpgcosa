@@ -106,6 +106,9 @@
 <div class="top-right">
     {% if request.user.is_authenticated %}
         Logueado como <strong>{{ request.user.username }}</strong> |
+        {% if request.user.is_superuser %}
+            <a href="{% url 'balance_simulator' %}">Balance sim</a> |
+        {% endif %}
         <a href="{% url 'logout' %}">Cerrar sesión</a>
     {% endif %}
 </div>

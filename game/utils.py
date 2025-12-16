@@ -1,15 +1,23 @@
 import random
 from django.db import transaction
 
+from .balance import (
+    ENEMY_RARITY_CHANCES,
+    RARITY_MULTIPLIERS,
+    ITEM_GACHA_PROBS,
+    RARITY_STAT_MULTIPLIER,
+    GACHA_COST_PER_PULL,
+    ENEMY_HP_GROWTH,
+    ENEMY_ATK_GROWTH,
+    ENEMY_DEF_GROWTH,
+)
 from .models import (
     EnemyType,
     EnemyInstance,
     EnemyRarity,
-    RARITY_MULTIPLIERS,
     Character,
     EquipmentItem,
     ItemRarity,
-    RARITY_STAT_MULTIPLIER,
 )
 
 from .battle_engine import Battler
@@ -18,19 +26,10 @@ from .battle_engine import Battler
 # Enemigos (instancias para batallas)
 # ====================================================
 
-# Probabilidades de rareza de ENEMIGOS
-RARITY_CHANCES = [
-    ("normal", 0.80),
-    ("strong", 0.15),
-    ("boss",   0.04),
-    ("legend", 0.01),
-]
-
-
 def choose_rarity():
     r = random.random()
     cumulative = 0
-    for rarity, chance in RARITY_CHANCES:
+    for rarity, chance in ENEMY_RARITY_CHANCES:
         cumulative += chance
         if r <= cumulative:
             return rarity
@@ -47,9 +46,9 @@ def calculate_enemy_stats(enemy_type: EnemyType, level: int, rarity: str):
     multiplier = RARITY_MULTIPLIERS[rarity]
 
     return {
-        "hp": int(enemy_type.base_hp * (1.10 ** (level - 1)) * multiplier),
-        "atk": int(enemy_type.base_atk * (1.08 ** (level - 1)) * multiplier),
-        "def": int(enemy_type.base_def * (1.07 ** (level - 1)) * multiplier),
+        "hp": int(enemy_type.base_hp * (ENEMY_HP_GROWTH ** (level - 1)) * multiplier),
+        "atk": int(enemy_type.base_atk * (ENEMY_ATK_GROWTH ** (level - 1)) * multiplier),
+        "def": int(enemy_type.base_def * (ENEMY_DEF_GROWTH ** (level - 1)) * multiplier),
         "speed": enemy_type.base_speed,
     }
 
@@ -95,10 +94,11 @@ def character_to_battler(character: Character) -> Battler:
     """
     eq_items = character.equipment_items.filter(is_equipped=True)
 
-    total_hp = character.base_hp
-    total_atk = character.base_atk
-    total_def = character.base_def
-    total_speed = character.base_speed
+    base_stats = character.base_stats_with_level()
+    total_hp = base_stats["hp"]
+    total_atk = base_stats["atk"]
+    total_def = base_stats["def"]
+    total_speed = base_stats["speed"]
 
     for item in eq_items:
         stats = item.total_stats()  # usa RARITY_STAT_MULTIPLIER internamente
@@ -196,25 +196,13 @@ def calculate_battle_rewards(enemies):
 # Gacha de ítems
 # ====================================================
 
-# Probabilidades de rareza para el gacha de equipo
-ITEM_GACHA_PROBS = [
-    (ItemRarity.BASIC,     0.50),
-    (ItemRarity.UNCOMMON,  0.25),
-    (ItemRarity.RARE,      0.15),
-    (ItemRarity.EPIC,      0.07),
-    (ItemRarity.LEGENDARY, 0.02),
-    (ItemRarity.MYTHIC,    0.009),
-    (ItemRarity.ASCENDED,  0.001),
-]
-
-
 def choose_item_rarity():
     r = random.random()
     cumulative = 0.0
     for rarity, prob in ITEM_GACHA_PROBS:
         cumulative += prob
         if r <= cumulative:
-            return rarity
+            return rarity if isinstance(rarity, str) else rarity
     return ItemRarity.BASIC
 
 
@@ -244,9 +232,6 @@ def base_stats_for_slot(slot):
     else:
         # fallback
         return {"hp": 5, "atk": 3, "def": 2, "speed": 0}
-
-
-GACHA_COST_PER_PULL = 20  # coste en monedas por intento
 
 
 @transaction.atomic
